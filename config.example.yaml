@@ -1,0 +1,85 @@
+app:
+  timezone: Asia/Shanghai
+  language: English
+  max_items: 50
+  max_selected: 10
+  output_dir: reports
+
+site:
+  enabled: true
+  output_dir: site
+  latest_filename: index.html
+  archive_dir: archive
+  public_url: ""
+
+topics:
+  - AGN
+  - intermediate-mass black holes
+  - dwarf galaxies
+  - galaxy evolution
+  - JWST
+  - MUSE
+
+sources:
+  arxiv:
+    enabled: true
+    max_results: 50
+    timeout_seconds: 90
+    retries: 3
+    categories:
+      - astro-ph.GA
+      - astro-ph.CO
+      - astro-ph.HE
+  nature:
+    enabled: true
+    max_results: 20
+    journals:
+      - Nature
+      - Nature Astronomy
+  science:
+    enabled: true
+    max_results: 20
+    journals:
+      - Science
+
+llm:
+  provider: openai_compatible
+  model: gpt-4o-mini
+  base_url: https://api.openai.com/v1
+  api_key_env: OPENAI_API_KEY
+  system_prompt: |
+    你是一位经验丰富的天文学家和科研助理，熟悉星系演化、活动星系核、黑洞、观测天文学和多波段数据分析。
+    你的任务是帮助研究者准确筛选、排序、总结和翻译每日论文。
+    请严格基于题目、摘要和提供的元数据作答，避免夸大结论。
+    请区分论文中明确给出的事实与基于摘要做出的合理推断。
+    技术术语应以中文为主，并在必要时附英文括号，例如：活动星系核（AGN）、中等质量黑洞（intermediate-mass black hole）、引力透镜（gravitational lensing）。
+    重点关注科学贡献、研究方法、局限性、后续方向，以及与用户研究兴趣的相关性。
+    输出应清晰、克制、准确，避免营销式语言。
+  temperature: 0.2
+  max_tokens: 4000
+  timeout_seconds: 60
+
+delivery:
+  email:
+    enabled: false
+    smtp_host: smtp.example.com
+    smtp_port: 587
+    username_env: SMTP_USERNAME
+    password_env: SMTP_PASSWORD
+    sender: ""
+    recipients:
+      - you@example.com
+    use_tls: true
+    attach_html: true
+    attach_markdown: false
+    body_style: brief
+  notion:
+    enabled: false
+    token_env: NOTION_TOKEN
+    database_id_env: NOTION_DATABASE_ID
+  pushplus:
+    enabled: false
+    token_env: PUSHPLUS_TOKEN
+  serverchan:
+    enabled: false
+    sendkey_env: SERVERCHAN_SENDKEY

@@ -1,0 +1,59 @@
+app:
+  timezone: Asia/Shanghai
+  language: English and Chinese
+  max_items: 50
+  max_selected: 5
+  output_dir: reports
+
+site:
+  enabled: true
+  output_dir: site
+  latest_filename: index.html
+  archive_dir: archive
+  public_url: ""
+
+topics:
+  - AGN
+  - intermediate-mass black holes
+  - dwarf galaxies
+  - galaxy evolution
+  - JWST
+  - MUSE
+  - lensing
+  - black holes
+  - CSST
+
+sources:
+  arxiv:
+    enabled: true
+    max_results: 50
+    timeout_seconds: 90
+    retries: 3
+    categories:
+      - astro-ph.GA
+      - astro-ph.CO
+      - astro-ph.HE
+      - astro-ph.IM
+  nature:
+    enabled: false
+  science:
+    enabled: false
+
+llm:
+  provider: deepseek
+  model: deepseek-chat
+  base_url: https://api.deepseek.com/v1
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.2
+  max_tokens: 6000
+  timeout_seconds: 60
+
+delivery:
+  email:
+    enabled: false
+  notion:
+    enabled: false
+  pushplus:
+    enabled: false
+  serverchan:
+    enabled: false

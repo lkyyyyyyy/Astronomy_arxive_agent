@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.lky.arxive-agent</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd /Users/lky/Desktop/Agent/arxive_agent &amp;&amp; mkdir -p logs .state &amp;&amp; /opt/anaconda3/bin/python3 scripts/run_scheduled.py --config config/config.yaml &gt;&gt; logs/launchd.log 2&gt;&amp;1</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/lky/Desktop/Agent/arxive_agent</string>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>8</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/lky/Desktop/Agent/arxive_agent/logs/launchd.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/lky/Desktop/Agent/arxive_agent/logs/launchd.err.log</string>
+</dict>
+</plist>
