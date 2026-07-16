@@ -76,6 +76,7 @@ class HtmlReportBuilder:
       <div class="section-heading">
         <p class="section-kicker">Signals</p>
         <h2>该日趋势</h2>
+        <p class="section-note">基于 {briefing.target_date.isoformat()} 的论文统计，共 {_total_fetched(briefing)} 篇。</p>
       </div>
       {_trend_widgets(briefing.research_trends)}
     </section>
@@ -818,6 +819,13 @@ def _css() -> str:
 
     .section-heading {
       margin-bottom: 20px;
+    }
+
+    .section-note {
+      margin: 8px 0 0;
+      color: rgba(218, 226, 245, 0.72);
+      font-size: 0.92rem;
+      line-height: 1.55;
     }
 
     .paper-card {
