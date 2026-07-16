@@ -48,8 +48,8 @@ llm:
   base_url: https://api.deepseek.com/v1
   api_key_env: DEEPSEEK_API_KEY
   temperature: 0.2
-  max_tokens: 6000
-  timeout_seconds: 60
+  max_tokens: 8000
+  timeout_seconds: 90
 
 delivery:
   email:

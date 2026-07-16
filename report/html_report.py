@@ -90,7 +90,7 @@ class HtmlReportBuilder:
       <div class="section-heading">
         <p class="section-kicker">Signals</p>
         <h2>本期趋势</h2>
-        <p class="section-note">基于北京时间 {_window_label(briefing)} 的全部天体物理论文统计，共 {_total_fetched(briefing)} 篇。</p>
+        <p class="section-note">基于 {_window_label(briefing)} 的全部天体物理论文统计，共 {_total_fetched(briefing)} 篇。</p>
       </div>
       {_trend_widgets(briefing.research_trends)}
     </section>

@@ -9,6 +9,7 @@ from utils.models import Paper, RankedPaper
 
 LOGGER = logging.getLogger(__name__)
 MAX_LLM_RANKING_CANDIDATES = 80
+LLM_RANKING_BATCH_SIZE = 12
 
 
 class PaperRanker:
@@ -24,19 +25,46 @@ class PaperRanker:
         heuristic = self._rank_heuristically(papers, topics)
         candidates = [item.paper for item in heuristic[:MAX_LLM_RANKING_CANDIDATES]]
         try:
-            return self._rank_with_llm(candidates, topics)
+            llm_ranked = self._rank_with_llm(candidates, topics)
+            ranked_by_url = {item.paper.url: item for item in llm_ranked}
+            merged = list(llm_ranked)
+            merged.extend(
+                item for item in heuristic if item.paper.url not in ranked_by_url
+            )
+            return sorted(merged, key=lambda item: item.interest_score, reverse=True)
         except Exception as exc:
             LOGGER.warning("LLM ranking failed; using heuristic ranking: %s", exc)
             return heuristic
 
     def _rank_with_llm(self, papers: list[Paper], topics: list[str]) -> list[RankedPaper]:
+        ranked: list[RankedPaper] = []
+        for start in range(0, len(papers), LLM_RANKING_BATCH_SIZE):
+            batch = papers[start : start + LLM_RANKING_BATCH_SIZE]
+            try:
+                ranked.extend(self._rank_batch_with_llm(batch, topics))
+            except Exception as exc:
+                LOGGER.warning(
+                    "LLM ranking batch failed; using heuristic ranking for that batch: %s",
+                    exc,
+                )
+                ranked.extend(self._rank_heuristically(batch, topics))
+
+        if not ranked:
+            raise ValueError("No ranked papers returned")
+        return sorted(ranked, key=lambda item: item.interest_score, reverse=True)
+
+    def _rank_batch_with_llm(self, papers: list[Paper], topics: list[str]) -> list[RankedPaper]:
         user_prompt = self._ranking_prompt(papers, topics)
         raw = self.llm.complete(self.system_prompt, user_prompt)
         data = extract_json(raw)
-        if not isinstance(data, list):
-            raise ValueError("Ranking response must be a JSON list")
+        if isinstance(data, dict):
+            rows = data.get("rankings") or data.get("items") or data.get("papers")
+        else:
+            rows = data
+        if not isinstance(rows, list):
+            raise ValueError("Ranking response must contain a JSON list under rankings")
 
-        by_index = {item.get("index"): item for item in data if isinstance(item, dict)}
+        by_index = {item.get("index"): item for item in rows if isinstance(item, dict)}
         ranked: list[RankedPaper] = []
         for idx, paper in enumerate(papers, start=1):
             item = by_index.get(idx)
@@ -68,7 +96,7 @@ class PaperRanker:
                         f"Authors: {', '.join(paper.authors[:8])}",
                         f"Source: {paper.journal or paper.source}",
                         f"Date: {paper.published_date.isoformat()}",
-                        f"Abstract: {shorten(paper.abstract, width=1600, placeholder='...')}",
+                        f"Abstract: {shorten(paper.abstract, width=900, placeholder='...')}",
                     ]
                 )
             )
@@ -84,18 +112,20 @@ even when they are outside the configured interests if they are unusually novel,
 important, methodologically useful, published in Nature/Science, or simply
 scientifically interesting.
 
-Return exactly one valid JSON array using double quotes and no trailing commas.
-Each item must use this schema:
-[
-  {{
-    "index": 1,
-    "interest_score": 85,
-    "novelty": "中文说明。",
-    "potential_impact": "中文说明。",
-    "relevance": "中文说明。",
-    "reason": "中文推荐理由。"
-  }}
-]
+Return exactly one valid JSON object using double quotes and no trailing commas.
+Use this schema:
+{{
+  "rankings": [
+    {{
+      "index": 1,
+      "interest_score": 85,
+      "novelty": "中文短句。",
+      "potential_impact": "中文短句。",
+      "relevance": "中文短句。",
+      "reason": "中文推荐理由，控制在60个汉字以内。"
+    }}
+  ]
+}}
 
 Style requirements:
 - All explanation fields must be Chinese.
@@ -105,7 +135,7 @@ Style requirements:
 - Do not over-rank a paper merely because it contains an interest keyword.
 - Prefer papers with clear new data, new methods, broad implications, strong surveys, notable instruments, or surprising results.
 - Scores below 60 mean the paper should usually not appear in the final briefing.
-- Return strict valid JSON only. No Markdown. No code fences. No commentary.
+- Return strict valid JSON object only. No Markdown. No code fences. No commentary.
 
 Papers:
 {chr(10).join(paper_blocks)}

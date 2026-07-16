@@ -23,6 +23,10 @@ from utils.models import Briefing, Paper, RankedPaper
 
 LOGGER = logging.getLogger(__name__)
 MIN_SELECTED_SCORE = 60
+MIN_INTEREST_PICKS = 3
+MAX_INTEREST_PICKS = 4
+STRONG_TOPIC_THRESHOLD = 8
+TREND_REPRESENTATIVE_THRESHOLD = 5
 
 
 def main() -> None:
@@ -41,7 +45,7 @@ def main() -> None:
             requested_date,
         )
     ranked = rank_papers(config, papers)
-    selected = select_papers(ranked, config.app.max_selected)
+    selected = select_papers(ranked, config.app.max_selected, config.topics)
     window_start, window_end = report_window(target_date, config.app.timezone)
     briefing = build_briefing(config, target_date, window_start, window_end, selected, papers)
 
@@ -243,22 +247,64 @@ def rank_papers(config: Config, papers: list[Paper]) -> list[RankedPaper]:
     return ranker.rank(papers, config.topics)
 
 
-def select_papers(ranked: list[RankedPaper], max_selected: int) -> list[RankedPaper]:
+def select_papers(
+    ranked: list[RankedPaper],
+    max_selected: int,
+    topics: list[str],
+) -> list[RankedPaper]:
     if not ranked:
         return []
 
     eligible = [item for item in ranked if item.interest_score >= MIN_SELECTED_SCORE]
-    priority = [item for item in eligible if _is_priority_source(item.paper)]
     selected: list[RankedPaper] = []
     seen_urls: set[str] = set()
 
-    for item in priority + eligible:
+    def add(item: RankedPaper) -> bool:
         if item.paper.url in seen_urls:
-            continue
+            return False
         selected.append(item)
         seen_urls.add(item.paper.url)
+        return True
+
+    for item in [paper for paper in eligible if _is_priority_source(paper.paper)]:
+        add(item)
+        if len(selected) >= max_selected:
+            return selected
+
+    interest_picks = 0
+    topic_counts = _interest_topic_counts(eligible, topics)
+    for topic in topics:
+        if interest_picks >= min(MIN_INTEREST_PICKS, max_selected):
+            break
+        candidate = _best_matching_interest_paper(eligible, topic, seen_urls)
+        if candidate and add(candidate):
+            interest_picks += 1
+
+    # If a configured interest is unusually common today, keep a second strong
+    # representative, but cap this lane so the briefing still has breadth.
+    for topic, count in topic_counts.most_common():
+        if interest_picks >= min(MAX_INTEREST_PICKS, max_selected):
+            break
+        if count < STRONG_TOPIC_THRESHOLD:
+            continue
+        candidate = _best_matching_interest_paper(eligible, topic, seen_urls)
+        if candidate and add(candidate):
+            interest_picks += 1
+
+    trend_counts = _trend_counts_for_ranked(eligible)
+    for trend, count in trend_counts.most_common():
+        if len(selected) >= max_selected:
+            return selected
+        if count < TREND_REPRESENTATIVE_THRESHOLD:
+            continue
+        candidate = _best_matching_trend_paper(eligible, trend, seen_urls)
+        if candidate:
+            add(candidate)
+
+    for item in eligible:
         if len(selected) >= max_selected:
             break
+        add(item)
 
     return selected
 
@@ -297,6 +343,82 @@ def _is_priority_source(paper: Paper) -> bool:
     return any(name in text for name in ["nature", "science"])
 
 
+def _interest_topic_counts(
+    ranked: list[RankedPaper],
+    topics: list[str],
+) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for item in ranked:
+        for topic in _matched_interest_topics(item.paper, topics):
+            counter[topic] += 1
+    return counter
+
+
+def _matched_interest_topics(paper: Paper, topics: list[str]) -> list[str]:
+    haystack = f"{paper.title} {paper.abstract}".casefold()
+    matches = []
+    for topic in topics:
+        aliases = _interest_aliases(topic)
+        if any(alias in haystack for alias in aliases):
+            matches.append(topic)
+    return matches
+
+
+def _interest_aliases(topic: str) -> list[str]:
+    aliases = {
+        "agn": ["agn", "active galactic nucleus", "active galactic nuclei", "quasar", "quasars"],
+        "black holes": ["black hole", "black holes", "smbh", "supermassive black hole"],
+        "intermediate-mass black holes": ["intermediate-mass black hole", "intermediate mass black hole", "imbh"],
+        "dwarf galaxies": ["dwarf galaxy", "dwarf galaxies"],
+        "galaxy evolution": ["galaxy evolution", "galaxy formation"],
+        "jwst": ["jwst", "james webb"],
+        "muse": ["muse"],
+        "lensing": ["lensing", "gravitational lens", "strong lens", "weak lens"],
+        "csst": ["csst"],
+    }
+    return aliases.get(topic.casefold(), [topic.casefold()])
+
+
+def _best_matching_interest_paper(
+    ranked: list[RankedPaper],
+    topic: str,
+    seen_urls: set[str],
+) -> RankedPaper | None:
+    aliases = _interest_aliases(topic)
+    for item in ranked:
+        if item.paper.url in seen_urls:
+            continue
+        haystack = f"{item.paper.title} {item.paper.abstract}".casefold()
+        if any(alias in haystack for alias in aliases):
+            return item
+    return None
+
+
+def _trend_counts_for_ranked(ranked: list[RankedPaper]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for item in ranked:
+        haystack = f"{item.paper.title} {item.paper.abstract}".casefold()
+        for label, aliases in _trend_taxonomy():
+            if any(alias in haystack for alias in aliases):
+                counter[label] += 1
+    return counter
+
+
+def _best_matching_trend_paper(
+    ranked: list[RankedPaper],
+    trend: str,
+    seen_urls: set[str],
+) -> RankedPaper | None:
+    aliases = dict(_trend_taxonomy()).get(trend, [])
+    for item in ranked:
+        if item.paper.url in seen_urls:
+            continue
+        haystack = f"{item.paper.title} {item.paper.abstract}".casefold()
+        if any(alias in haystack for alias in aliases):
+            return item
+    return None
+
+
 def _build_highlights(selected: list[RankedPaper]) -> list[str]:
     highlights = []
     for item in selected[:5]:
@@ -310,7 +432,7 @@ def _build_research_trends(papers: list[Paper], window_start, window_end) -> lis
     window_label = format_beijing_window(window_start, window_end)
     total = len(papers)
     if not papers:
-        return [f"本期北京时间 {window_label} 共抓取到 0 篇天体物理论文，暂时无法判断主题趋势。"]
+        return [f"本期 {window_label} 共抓取到 0 篇天体物理论文，暂时无法判断主题趋势。"]
 
     counter: Counter[str] = Counter()
     for paper in papers:
@@ -319,7 +441,7 @@ def _build_research_trends(papers: list[Paper], window_start, window_end) -> lis
             if any(alias in haystack for alias in aliases):
                 counter[label] += 1
 
-    trends = [f"本期北京时间 {window_label} 共抓取到 {total} 篇天体物理论文。"]
+    trends = [f"本期 {window_label} 共抓取到 {total} 篇天体物理论文。"]
     if not counter:
         trends.append("本期论文主题较分散，暂时没有形成明显高频关键词。")
         return trends

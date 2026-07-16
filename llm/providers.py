@@ -34,6 +34,8 @@ class OpenAICompatibleClient(LLMClient):
             "temperature": self.config.temperature,
             "max_tokens": self.config.max_tokens,
         }
+        if self.config.provider.lower() == "deepseek":
+            payload["response_format"] = {"type": "json_object"}
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",

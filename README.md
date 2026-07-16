@@ -60,7 +60,7 @@ To test a specific day:
 python main.py --date 2026-07-08 --no-delivery
 ```
 
-`topics` are not fetch filters. They are preference signals for ranking and selection. The agent fetches all configured astrophysics papers first, then selects up to `app.max_selected` papers with at least a three-star score (`>= 60/100`) based on interest, novelty, scientific value, method usefulness, source priority, and overall recommendation strength.
+`topics` are not fetch filters. They are preference signals for ranking and selection. The agent fetches all configured astrophysics papers first, then selects up to `app.max_selected` papers with at least a three-star score (`>= 60/100`). Selection is intentionally mixed: it keeps room for papers that match your configured interests, adds representatives from unusually strong daily trends, prioritizes Nature/Science when present, and fills the remaining slots by overall scientific value.
 
 ## LLM Providers
 
