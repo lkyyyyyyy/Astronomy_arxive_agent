@@ -19,7 +19,7 @@ from summarizer.summarizer import PaperSummarizer
 from utils.dates import format_beijing_window, parse_date, report_window
 from utils.dedupe import dedupe_papers
 from utils.logging import setup_logging
-from utils.models import Briefing, Paper, RankedPaper
+from utils.models import Briefing, Paper, PaperSummary, RankedPaper
 
 LOGGER = logging.getLogger(__name__)
 MIN_SELECTED_SCORE = 60
@@ -324,15 +324,15 @@ def build_briefing(
     )
     summaries = summarizer.summarize(selected)
     paired = [(item, summaries[item.paper.url]) for item in selected]
-    must_read_count = min(3, len(paired))
+    interest_pairs, other_pairs = _split_interest_pairs(paired, config.topics)
 
     return Briefing(
         target_date=target_date,
         window_start=window_start,
         window_end=window_end,
         highlights=_build_highlights(selected),
-        must_read=paired[:must_read_count],
-        recommended=paired[must_read_count:],
+        must_read=interest_pairs,
+        recommended=other_pairs,
         research_trends=_build_research_trends(all_papers, window_start, window_end),
         open_questions=_build_open_questions(selected),
     )
@@ -362,6 +362,21 @@ def _matched_interest_topics(paper: Paper, topics: list[str]) -> list[str]:
         if any(alias in haystack for alias in aliases):
             matches.append(topic)
     return matches
+
+
+def _split_interest_pairs(
+    paired: list[tuple[RankedPaper, PaperSummary]],
+    topics: list[str],
+) -> tuple[list[tuple[RankedPaper, PaperSummary]], list[tuple[RankedPaper, PaperSummary]]]:
+    """Separate selected papers by whether they match the editable user interests."""
+    interest_items: list[tuple[RankedPaper, PaperSummary]] = []
+    other_items: list[tuple[RankedPaper, PaperSummary]] = []
+    for item, summary in paired:
+        if _matched_interest_topics(item.paper, topics):
+            interest_items.append((item, summary))
+        else:
+            other_items.append((item, summary))
+    return interest_items, other_items
 
 
 def _interest_aliases(topic: str) -> list[str]:

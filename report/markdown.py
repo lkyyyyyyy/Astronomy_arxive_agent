@@ -10,12 +10,12 @@ class MarkdownReportBuilder:
     def build(self, briefing: Briefing) -> str:
         lines: list[str] = [f"# 天文论文日报（本期：{_window_label(briefing)}）"]
 
-        self._append_section(lines, "## 本期最值得读")
-        must_read = briefing.must_read[:3]
-        lines.extend(self._paper_sections(must_read, start_index=1))
+        self._append_section(lines, "## 你感兴趣的文章")
+        interest_items = briefing.must_read
+        lines.extend(self._paper_sections(interest_items, start_index=1))
 
         self._append_section(lines, "## 推荐阅读")
-        lines.extend(self._paper_sections(briefing.recommended, start_index=len(must_read) + 1))
+        lines.extend(self._paper_sections(briefing.recommended, start_index=len(interest_items) + 1))
 
         self._append_section(lines, "## 本期趋势")
         lines.extend(self._bullet_list(briefing.research_trends, "本期论文数量不足，暂时无法判断稳定趋势。"))

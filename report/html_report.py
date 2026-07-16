@@ -42,7 +42,7 @@ ASTRONOMY_IMAGE_POOL = [
 
 class HtmlReportBuilder:
     def build(self, briefing: Briefing) -> str:
-        must_read = briefing.must_read[:3]
+        must_read = briefing.must_read
         recommended = briefing.recommended
         all_items = must_read + recommended
         report_title = _report_title(briefing)
@@ -105,8 +105,8 @@ class HtmlReportBuilder:
       <div class="paper-column">
         <section id="must-read" class="section">
           <div class="section-heading">
-            <p class="section-kicker">Top picks</p>
-            <h2>本期最值得读</h2>
+            <p class="section-kicker">Your interests</p>
+            <h2>你感兴趣的文章</h2>
           </div>
           {_paper_cards(must_read, start_index=1)}
         </section>

@@ -14,6 +14,8 @@ site:
   public_url: "https://lkyyyyyyy.github.io/Astronomy_arxive_agent/"
 
 topics:
+  # Edit these interests to control ranking preference and the
+  # "你感兴趣的文章" section in the report.
   - AGN
   - intermediate-mass black holes
   - dwarf galaxies
