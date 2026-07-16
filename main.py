@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
-from datetime import date
+from datetime import date, timedelta
 import json
 import logging
 from pathlib import Path
@@ -29,10 +29,16 @@ def main() -> None:
     args = parse_args()
     config_path = resolve_config_path(args.config)
     config = load_config(config_path)
-    target_date = parse_date(args.date, config.app.timezone)
+    requested_date = parse_date(args.date, config.app.timezone)
 
-    LOGGER.info("Starting AI Research Daily Agent for %s", target_date)
-    papers = collect_papers(config, target_date)
+    LOGGER.info("Starting AI Research Daily Agent for requested date %s", requested_date)
+    target_date, papers = collect_papers_with_fallback(config, requested_date)
+    if target_date != requested_date:
+        LOGGER.info(
+            "Using %s as the report paper date because %s had no fetched papers.",
+            target_date,
+            requested_date,
+        )
     ranked = rank_papers(config, papers)
     selected = select_papers(ranked, config.app.max_selected)
     briefing = build_briefing(config, target_date, selected, papers)
@@ -73,7 +79,7 @@ def main() -> None:
         )
         return
 
-    title = f"天文论文日报（截止 {target_date.isoformat()}）"
+    title = f"天文论文日报（文章日期：{target_date.isoformat()}）"
     delivery_context = DeliveryContext(
         markdown=markdown,
         markdown_path=markdown_path,
@@ -167,6 +173,18 @@ def collect_papers(config: Config, target_date: date) -> list[Paper]:
     if len(unique) != len(papers):
         LOGGER.info("Removed %d duplicate item(s).", len(papers) - len(unique))
     return unique[: config.app.max_items]
+
+
+def collect_papers_with_fallback(config: Config, requested_date: date) -> tuple[date, list[Paper]]:
+    fallback_days = max(0, int(config.app.fallback_days))
+    for offset in range(fallback_days + 1):
+        candidate_date = requested_date - timedelta(days=offset)
+        papers = collect_papers(config, candidate_date)
+        if papers:
+            return candidate_date, papers
+        if offset < fallback_days:
+            LOGGER.info("No papers fetched for %s; trying previous day.", candidate_date)
+    return requested_date, []
 
 
 def publish_site_report(config: Config, html: str, html_filename: str) -> Path | None:
@@ -282,9 +300,10 @@ def _build_highlights(selected: list[RankedPaper]) -> list[str]:
 
 
 def _build_research_trends(papers: list[Paper], topics: list[str]) -> list[str]:
+    paper_date = papers[0].published_date.isoformat() if papers else ""
     total = len(papers)
     if not papers:
-        return ["今天共抓取到 0 篇论文，暂时无法判断主题趋势。"]
+        return ["本期共抓取到 0 篇论文，暂时无法判断主题趋势。"]
 
     counter: Counter[str] = Counter()
     for paper in papers:
@@ -293,12 +312,12 @@ def _build_research_trends(papers: list[Paper], topics: list[str]) -> list[str]:
             if _topic_matches(topic, haystack):
                 counter[_topic_label(topic)] += 1
 
-    trends = [f"今天共抓取到 {total} 篇论文。"]
+    trends = [f"本期文章日期为 {paper_date}，共抓取到 {total} 篇论文。"]
     if not counter:
         trends.append("这些论文的主题较分散，暂时没有形成明显的配置关键词热点。")
         return trends
     trends.extend(
-        f"今天所有 arXiv 论文中，{topic}相关论文共有 {count} 篇。"
+        f"在 {paper_date} 的 arXiv 论文中，{topic}相关论文共有 {count} 篇。"
         for topic, count in counter.most_common(6)
     )
     return trends

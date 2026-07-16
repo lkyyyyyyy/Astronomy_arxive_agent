@@ -7,20 +7,20 @@ from utils.models import Briefing, PaperSummary, RankedPaper
 
 class MarkdownReportBuilder:
     def build(self, briefing: Briefing) -> str:
-        lines: list[str] = [f"# 天文论文日报（截止 {briefing.target_date.isoformat()}）"]
+        lines: list[str] = [f"# 天文论文日报（文章日期：{briefing.target_date.isoformat()}）"]
 
-        self._append_section(lines, "## 今日最值得读")
+        self._append_section(lines, "## 该日最值得读")
         must_read = briefing.must_read[:3]
         lines.extend(self._paper_sections(must_read, start_index=1))
 
         self._append_section(lines, "## 推荐阅读")
         lines.extend(self._paper_sections(briefing.recommended, start_index=len(must_read) + 1))
 
-        self._append_section(lines, "## 今日趋势")
-        lines.extend(self._bullet_list(briefing.research_trends, "今天的论文数量不足，暂时无法判断稳定趋势。"))
+        self._append_section(lines, "## 该日趋势")
+        lines.extend(self._bullet_list(briefing.research_trends, "该日论文数量不足，暂时无法判断稳定趋势。"))
 
         self._append_section(lines, "## 可以关注的问题")
-        lines.extend(self._bullet_list(briefing.open_questions, "今天暂无可进一步追踪的问题。"))
+        lines.extend(self._bullet_list(briefing.open_questions, "本期暂无可进一步追踪的问题。"))
 
         return _clean_blank_lines(lines)
 

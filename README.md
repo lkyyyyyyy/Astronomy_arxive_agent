@@ -40,7 +40,7 @@ The HTML report is self-contained, includes all CSS in the file, and can be open
 
 `site/index.html` is the latest report formatted for GitHub Pages. The archive copy in `site/archive/` keeps dated HTML snapshots.
 
-If local astronomy images are available, the HTML report randomly embeds one compressed image as the hero visual. The file remains self-contained, so the image still displays after downloading the email attachment.
+The HTML report randomly embeds compressed astronomy images from `assets/astronomy/` as the hero and page background visuals. The file remains self-contained, so the images display on GitHub Pages and after downloading the email attachment.
 
 Paper cards do not use random decorative images. A placeholder hook exists for future paper-specific figure extraction, but figures are omitted unless they can be clearly associated with the paper.
 
@@ -50,7 +50,11 @@ If you keep your config at the project root as `config.yaml`, the agent will als
 python main.py --config config.yaml --no-delivery
 ```
 
-By default, the agent targets the previous day in `app.timezone`. To test a specific day:
+By default, the agent targets the previous day in `app.timezone` and filters sources to that article date. If no papers are fetched for that date, it looks backward up to `app.fallback_days` days and reports the latest date that actually has papers. The visible title uses the actual article date, for example `天文论文日报（文章日期：2026-07-15）`.
+
+This matters on weekends and holidays: if arXiv has no new matching papers, the website and email keep showing the most recent available paper date instead of pretending that stale papers are from today.
+
+To test a specific day:
 
 ```bash
 python main.py --date 2026-07-08 --no-delivery
@@ -179,13 +183,13 @@ jobs:
 ## GitHub Pages Website
 
 The project can publish the HTML briefing as a mobile-friendly website through GitHub Pages.
-The included workflow `.github/workflows/github-pages.yml` runs at 08:15 Asia/Shanghai time and deploys the generated `site/` folder.
+The included workflow `.github/workflows/github-pages.yml` runs at 08:00 Asia/Shanghai time, deploys the generated `site/` folder, and sends a short email with the website link.
 
 Setup:
 
 1. Push this project to a GitHub repository.
 2. In GitHub, open `Settings -> Pages` and choose `GitHub Actions` as the source.
-3. Add `DEEPSEEK_API_KEY` under `Settings -> Secrets and variables -> Actions -> Repository secrets`.
+3. Add `DEEPSEEK_API_KEY`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_SENDER`, and `SMTP_RECIPIENTS` under `Settings -> Secrets and variables -> Actions -> Repository secrets`.
 4. Run the workflow manually once from `Actions -> Astronomy Daily Pages -> Run workflow`.
 5. Copy the Pages URL into `config/config.yaml`:
 
@@ -194,7 +198,7 @@ site:
   public_url: "https://YOUR_USER.github.io/YOUR_REPO/"
 ```
 
-After `site.public_url` is configured, the brief email includes an online reading link. The GitHub Actions workflow uses `config.github-pages.yaml`, where delivery is disabled so it will not send duplicate emails.
+After `site.public_url` is configured, the brief email includes an online reading link. The GitHub Actions workflow uses `config.github-pages.yaml`.
 
 ## Project Structure
 

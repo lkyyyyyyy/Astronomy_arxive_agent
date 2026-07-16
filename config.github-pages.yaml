@@ -4,6 +4,7 @@ app:
   max_items: 50
   max_selected: 5
   output_dir: reports
+  fallback_days: 7
 
 site:
   enabled: true

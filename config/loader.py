@@ -24,6 +24,7 @@ class AppConfig:
     max_items: int = 50
     max_selected: int = 10
     output_dir: str = "reports"
+    fallback_days: int = 7
 
 
 @dataclass(slots=True)

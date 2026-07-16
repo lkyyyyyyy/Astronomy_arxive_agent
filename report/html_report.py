@@ -61,21 +61,21 @@ class HtmlReportBuilder:
     <header class="hero">
       <div class="hero-content">
         <p class="subtitle">ASTRONOMY RESEARCH DAILY</p>
-        <h1>天文论文<span class="title-gradient">日报</span><span class="title-cutoff">（截止 {briefing.target_date.isoformat()}）</span></h1>
+        <h1>天文论文<span class="title-gradient">日报</span><span class="title-cutoff">（文章日期：{briefing.target_date.isoformat()}）</span></h1>
         <p class="hero-tagline">探索宇宙 · 追踪前沿 · 启发研究</p>
       </div>
       <div class="hero-grid">
-        {_stat_tile("今日抓取论文数", str(_total_fetched(briefing)))}
+        {_stat_tile("该日抓取论文数", str(_total_fetched(briefing)))}
         {_stat_tile("入选推荐论文数", str(len(all_items)))}
         {_stat_tile("最高推荐等级", _highest_rating(all_items))}
         {_stat_tile("主要趋势关键词", _main_trend_keyword(briefing))}
       </div>
     </header>
 
-    <section id="trends" class="trend-dashboard" aria-label="今日趋势">
+    <section id="trends" class="trend-dashboard" aria-label="该日趋势">
       <div class="section-heading">
         <p class="section-kicker">Signals</p>
-        <h2>今日趋势</h2>
+        <h2>该日趋势</h2>
       </div>
       {_trend_widgets(briefing.research_trends)}
     </section>
@@ -91,7 +91,7 @@ class HtmlReportBuilder:
         <section id="must-read" class="section">
           <div class="section-heading">
             <p class="section-kicker">Top picks</p>
-            <h2>今日最值得读</h2>
+            <h2>该日最值得读</h2>
           </div>
           {_paper_cards(must_read, start_index=1)}
         </section>
@@ -130,7 +130,7 @@ class HtmlReportBuilder:
 
 
 def _report_title(briefing: Briefing) -> str:
-    return f"天文论文日报（截止 {briefing.target_date.isoformat()}）"
+    return f"天文论文日报（文章日期：{briefing.target_date.isoformat()}）"
 
 
 def _stat_tile(label: str, value: str) -> str:
@@ -1463,11 +1463,12 @@ def _css() -> str:
     }
 
     .dashboard-layout {
-      transition: grid-template-columns 260ms ease;
+      transition: none;
     }
 
     .dashboard-sidebar {
       min-width: 0;
+      overflow: hidden;
       transition: opacity 240ms ease, transform 240ms ease;
     }
 
@@ -1500,11 +1501,11 @@ def _css() -> str:
 
     .dashboard-layout.sidebar-collapsed .toc {
       opacity: 0;
-      transform: translateX(-16px);
+      transform: translateX(-10px);
       pointer-events: none;
-      max-height: 0;
       padding: 0;
       border-width: 0;
+      visibility: hidden;
       overflow: hidden;
     }
 
@@ -1514,7 +1515,8 @@ def _css() -> str:
     }
 
     .toc {
-      transition: opacity 240ms ease, transform 240ms ease, max-height 260ms ease, padding 240ms ease;
+      will-change: opacity, transform;
+      transition: opacity 180ms ease, transform 180ms ease, visibility 180ms ease;
     }
 
     .toc-title {
@@ -1894,6 +1896,22 @@ def _css() -> str:
       block-size: auto;
     }
 
+    .trend-grid {
+      grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+      align-items: stretch;
+    }
+
+    .trend-widget {
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .trend-ring {
+      width: clamp(72px, 18vw, 84px);
+      height: clamp(72px, 18vw, 84px);
+      flex: 0 0 auto;
+    }
+
     @keyframes fadeInUp {
       from {
         opacity: 0;
@@ -1933,8 +1951,28 @@ def _css() -> str:
         gap: 10px;
       }
 
+      .trend-grid {
+        grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+        gap: 12px;
+      }
+
       .paper-card {
         padding: 24px 20px;
+      }
+    }
+
+    @media (max-width: 430px) {
+      .trend-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .trend-ring {
+        width: 68px;
+        height: 68px;
+      }
+
+      .trend-widget {
+        padding: 12px 8px;
       }
     }
 """
