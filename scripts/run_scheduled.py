@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, time
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -15,14 +16,18 @@ if str(PROJECT_ROOT) not in sys.path:
 from config.loader import load_config
 
 
-STATE_PATH = Path(".state/scheduled-runs.json")
-SUMMARY_PATH = Path(".state/last-scheduled-summary.json")
+STATE_PATH = PROJECT_ROOT / ".state/scheduled-runs.json"
+SUMMARY_PATH = PROJECT_ROOT / ".state/last-scheduled-summary.json"
 RUN_HOUR = 8
 
 
 def main() -> int:
+    os.chdir(PROJECT_ROOT)
     args = parse_args()
-    config = load_config(args.config)
+    config_path = Path(args.config)
+    if not config_path.is_absolute():
+        config_path = PROJECT_ROOT / config_path
+    config = load_config(config_path)
     now = datetime.now(ZoneInfo(config.app.timezone))
     run_date = now.date().isoformat()
 
@@ -37,9 +42,9 @@ def main() -> int:
 
     command = [
         sys.executable,
-        "main.py",
+        str(PROJECT_ROOT / "main.py"),
         "--config",
-        args.config,
+        str(config_path),
         "--skip-delivery-if-empty",
         "--summary-json",
         str(SUMMARY_PATH),

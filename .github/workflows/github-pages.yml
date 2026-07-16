@@ -29,10 +29,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Generate latest report
-        run: python main.py --config config.github-pages.yaml --no-delivery
+      - name: Generate latest report and email link
+        run: python main.py --config config.github-pages.yaml --skip-delivery-if-empty
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_SENDER: ${{ secrets.SMTP_SENDER }}
+          SMTP_RECIPIENTS: ${{ secrets.SMTP_RECIPIENTS }}
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

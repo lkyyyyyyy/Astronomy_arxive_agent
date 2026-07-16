@@ -19,16 +19,19 @@ class EmailDelivery(DeliveryChannel):
     def send(self, title: str, context: DeliveryContext) -> None:
         username = os.getenv(self.config.username_env, "")
         password = os.getenv(self.config.password_env, "")
-        sender = self.config.sender or username
+        sender = self.config.sender or os.getenv(self.config.sender_env, "") or username
+        recipients = self.config.recipients or _env_list(self.config.recipients_env)
         missing = []
         if not self.config.smtp_host:
             missing.append("delivery.email.smtp_host")
         if not sender:
-            missing.append(f"delivery.email.sender or env {self.config.username_env}")
+            missing.append(
+                f"delivery.email.sender, env {self.config.sender_env}, or env {self.config.username_env}"
+            )
         if not password:
             missing.append(f"env {self.config.password_env}")
-        if not self.config.recipients:
-            missing.append("delivery.email.recipients")
+        if not recipients:
+            missing.append(f"delivery.email.recipients or env {self.config.recipients_env}")
         if missing:
             LOGGER.warning(
                 "Email delivery skipped because settings are incomplete: %s",
@@ -39,7 +42,7 @@ class EmailDelivery(DeliveryChannel):
         message = EmailMessage()
         message["Subject"] = title
         message["From"] = sender
-        message["To"] = ", ".join(self.config.recipients)
+        message["To"] = ", ".join(recipients)
 
         html_available = bool(context.html_path and context.html_path.exists())
         if self.config.body_style == "brief" and html_available:
@@ -71,7 +74,7 @@ class EmailDelivery(DeliveryChannel):
             if username:
                 smtp.login(username, password)
             smtp.send_message(message)
-        LOGGER.info("Email briefing sent to %d recipient(s).", len(self.config.recipients))
+        LOGGER.info("Email briefing sent to %d recipient(s).", len(recipients))
 
 
 def _brief_body(context: DeliveryContext) -> str:
@@ -118,6 +121,11 @@ def _attach_text_file(
         LOGGER.info("Attached report file: %s", path)
     except Exception as exc:
         LOGGER.error("Could not attach %s: %s", path, exc)
+
+
+def _env_list(name: str) -> list[str]:
+    raw = os.getenv(name, "")
+    return [item.strip() for item in raw.replace(";", ",").split(",") if item.strip()]
 
 
 def _score_to_stars(score: int) -> str:

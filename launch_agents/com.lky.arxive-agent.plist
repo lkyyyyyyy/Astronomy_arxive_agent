@@ -8,13 +8,11 @@
 
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/zsh</string>
-    <string>-lc</string>
-    <string>cd /Users/lky/Desktop/Agent/arxive_agent &amp;&amp; mkdir -p logs .state &amp;&amp; /opt/anaconda3/bin/python3 scripts/run_scheduled.py --config config/config.yaml &gt;&gt; logs/launchd.log 2&gt;&amp;1</string>
+    <string>/opt/anaconda3/bin/python3</string>
+    <string>/Users/lky/Desktop/Agent/arxive_agent/scripts/run_scheduled.py</string>
+    <string>--config</string>
+    <string>/Users/lky/Desktop/Agent/arxive_agent/config/config.yaml</string>
   </array>
-
-  <key>WorkingDirectory</key>
-  <string>/Users/lky/Desktop/Agent/arxive_agent</string>
 
   <key>StartCalendarInterval</key>
   <dict>

@@ -64,6 +64,8 @@ class EmailConfig:
     smtp_port: int = 587
     username_env: str = "SMTP_USERNAME"
     password_env: str = "SMTP_PASSWORD"
+    sender_env: str = "SMTP_SENDER"
+    recipients_env: str = "SMTP_RECIPIENTS"
     sender: str = ""
     recipients: list[str] = field(default_factory=list)
     use_tls: bool = True

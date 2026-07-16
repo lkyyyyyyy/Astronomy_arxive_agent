@@ -10,7 +10,7 @@ site:
   output_dir: site
   latest_filename: index.html
   archive_dir: archive
-  public_url: ""
+  public_url: "https://lkyyyyyyy.github.io/Astronomy-daily/"
 
 topics:
   - AGN
@@ -50,7 +50,19 @@ llm:
 
 delivery:
   email:
-    enabled: false
+    enabled: true
+    smtp_host: smtp.qq.com
+    smtp_port: 587
+    username_env: SMTP_USERNAME
+    password_env: SMTP_PASSWORD
+    sender_env: SMTP_SENDER
+    recipients_env: SMTP_RECIPIENTS
+    sender: ""
+    recipients: []
+    use_tls: true
+    attach_html: false
+    attach_markdown: false
+    body_style: brief
   notion:
     enabled: false
   pushplus:
