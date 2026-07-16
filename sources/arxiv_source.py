@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone as datetime_timezone
 from email.utils import parsedate_to_datetime
 import logging
 import time
@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 import requests
 
 from sources.base import Source
+from utils.dates import report_window
 from utils.models import Paper
 
 LOGGER = logging.getLogger(__name__)
@@ -19,24 +20,21 @@ class ArxivSource(Source):
     name = "arxiv"
     api_url = "https://export.arxiv.org/api/query"
 
-    def fetch(self, target_date: date, topics: list[str]) -> list[Paper]:
-        if not topics:
-            LOGGER.warning("No topics configured; arXiv query may be too broad.")
-
-        query = self._build_query(target_date, topics)
-        response_text = self._request_feed(query, target_date)
-        if response_text is None and topics:
-            LOGGER.warning(
-                "arXiv topic query failed; retrying with date/category query only."
-            )
-            response_text = self._request_feed(self._build_query(target_date, []), target_date)
-
+    def fetch(self, target_date: date, topics: list[str], timezone: str) -> list[Paper]:
+        window_start, window_end = report_window(target_date, timezone)
+        query = self._build_query(window_start, window_end)
+        response_text = self._request_feed(query, window_start, window_end)
         if response_text is None:
             return []
 
-        return self._parse_feed(response_text, target_date)
+        return self._parse_feed(response_text, window_start, window_end)
 
-    def _request_feed(self, query: str, target_date: date) -> str | None:
+    def _request_feed(
+        self,
+        query: str,
+        window_start: datetime,
+        window_end: datetime,
+    ) -> str | None:
         params = {
             "search_query": query,
             "start": 0,
@@ -45,7 +43,7 @@ class ArxivSource(Source):
             "sortOrder": "descending",
         }
         url = f"{self.api_url}?{urlencode(params)}"
-        LOGGER.info("Fetching arXiv papers for %s", target_date)
+        LOGGER.info("Fetching arXiv papers for %s to %s", window_start, window_end)
 
         timeout = max(10, int(getattr(self.config, "timeout_seconds", 90)))
         retries = max(1, int(getattr(self.config, "retries", 3)))
@@ -70,7 +68,12 @@ class ArxivSource(Source):
 
         return None
 
-    def _parse_feed(self, response_text: str, target_date: date) -> list[Paper]:
+    def _parse_feed(
+        self,
+        response_text: str,
+        window_start: datetime,
+        window_end: datetime,
+    ) -> list[Paper]:
         papers: list[Paper] = []
         try:
             root = ET.fromstring(response_text)
@@ -80,55 +83,64 @@ class ArxivSource(Source):
 
         namespace = {"atom": "http://www.w3.org/2005/Atom"}
         for entry in root.findall("atom:entry", namespace):
-            published = _entry_date(entry)
-            if published != target_date:
+            published_dt = _entry_datetime(entry)
+            if not published_dt:
+                continue
+            published_local = published_dt.astimezone(window_start.tzinfo)
+            if not (window_start <= published_local < window_end):
                 continue
             papers.append(
                 Paper(
                     title=_clean_text(_text(entry, "atom:title", namespace)),
                     authors=_authors(entry, namespace),
                     abstract=_clean_text(_text(entry, "atom:summary", namespace)),
-                    published_date=published,
+                    published_date=published_local.date(),
                     source=self.name,
                     journal="arXiv",
                     url=_entry_url(entry, namespace),
                     pdf_url=_pdf_url(entry),
                     raw_id=_text(entry, "atom:id", namespace),
+                    published_datetime=published_local,
                 )
             )
 
-        LOGGER.info("Fetched %d arXiv papers for %s", len(papers), target_date)
+        LOGGER.info(
+            "Fetched %d arXiv papers for %s to %s",
+            len(papers),
+            window_start,
+            window_end,
+        )
         return papers
 
-    def _build_query(self, target_date: date, topics: list[str]) -> str:
-        date_part = target_date.strftime("%Y%m%d")
-        date_query = f"submittedDate:[{date_part}0000 TO {date_part}2359]"
+    def _build_query(self, window_start: datetime, window_end: datetime) -> str:
+        start_utc = window_start.astimezone(datetime_timezone.utc)
+        end_utc = window_end.astimezone(datetime_timezone.utc)
+        date_query = (
+            f"submittedDate:[{start_utc:%Y%m%d%H%M} TO {end_utc:%Y%m%d%H%M}]"
+        )
 
-        topic_terms = [
-            f'(ti:"{topic}" OR abs:"{topic}" OR all:"{topic}")'
-            for topic in topics
-        ]
-        topic_query = " OR ".join(topic_terms) if topic_terms else "all:*"
-
-        category_query = ""
         if self.config.categories:
             cats = " OR ".join(f"cat:{category}" for category in self.config.categories)
-            category_query = f" AND ({cats})"
+            return f"({cats}) AND {date_query}"
 
-        return f"({topic_query}) AND {date_query}{category_query}"
+        LOGGER.warning("No arXiv categories configured; query may be very broad.")
+        return f"all:* AND {date_query}"
 
 
-def _entry_date(entry: ET.Element) -> date:
+def _entry_datetime(entry: ET.Element) -> datetime | None:
     namespace = {"atom": "http://www.w3.org/2005/Atom"}
     raw = _text(entry, "atom:published", namespace) or _text(
         entry, "atom:updated", namespace
     )
     if not raw:
-        return date.min
+        return None
     try:
-        return parsedate_to_datetime(raw).date()
+        parsed = parsedate_to_datetime(raw)
     except (TypeError, ValueError):
-        return datetime.fromisoformat(raw.replace("Z", "+00:00")).date()
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=datetime_timezone.utc)
+    return parsed
 
 
 def _pdf_url(entry: ET.Element) -> str | None:

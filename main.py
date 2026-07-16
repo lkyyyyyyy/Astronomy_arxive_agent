@@ -16,12 +16,13 @@ from report.html_report import HtmlReportBuilder
 from report.markdown import MarkdownReportBuilder
 from sources.factory import build_sources
 from summarizer.summarizer import PaperSummarizer
-from utils.dates import parse_date
+from utils.dates import format_beijing_window, parse_date, report_window
 from utils.dedupe import dedupe_papers
 from utils.logging import setup_logging
 from utils.models import Briefing, Paper, RankedPaper
 
 LOGGER = logging.getLogger(__name__)
+MIN_SELECTED_SCORE = 60
 
 
 def main() -> None:
@@ -41,7 +42,8 @@ def main() -> None:
         )
     ranked = rank_papers(config, papers)
     selected = select_papers(ranked, config.app.max_selected)
-    briefing = build_briefing(config, target_date, selected, papers)
+    window_start, window_end = report_window(target_date, config.app.timezone)
+    briefing = build_briefing(config, target_date, window_start, window_end, selected, papers)
 
     markdown_builder = MarkdownReportBuilder()
     markdown = markdown_builder.build(briefing)
@@ -79,7 +81,7 @@ def main() -> None:
         )
         return
 
-    title = f"天文论文日报（文章日期：{target_date.isoformat()}）"
+    title = f"天文论文日报（本期：{format_beijing_window(window_start, window_end)}）"
     delivery_context = DeliveryContext(
         markdown=markdown,
         markdown_path=markdown_path,
@@ -117,7 +119,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--date",
         default=None,
-        help="Target publication date in YYYY-MM-DD. Defaults to previous day.",
+        help="Report window start date in YYYY-MM-DD. Defaults to previous day, 08:00 Beijing time to next-day 08:00.",
     )
     parser.add_argument(
         "--no-delivery",
@@ -165,7 +167,7 @@ def collect_papers(config: Config, target_date: date) -> list[Paper]:
 
     for source in sources:
         try:
-            papers.extend(source.fetch(target_date, config.topics))
+            papers.extend(source.fetch(target_date, config.topics, config.app.timezone))
         except Exception as exc:
             LOGGER.error("Source %s failed: %s", source.name, exc)
 
@@ -245,11 +247,12 @@ def select_papers(ranked: list[RankedPaper], max_selected: int) -> list[RankedPa
     if not ranked:
         return []
 
-    priority = [item for item in ranked if _is_priority_source(item.paper)]
+    eligible = [item for item in ranked if item.interest_score >= MIN_SELECTED_SCORE]
+    priority = [item for item in eligible if _is_priority_source(item.paper)]
     selected: list[RankedPaper] = []
     seen_urls: set[str] = set()
 
-    for item in priority + ranked:
+    for item in priority + eligible:
         if item.paper.url in seen_urls:
             continue
         selected.append(item)
@@ -263,6 +266,8 @@ def select_papers(ranked: list[RankedPaper], max_selected: int) -> list[RankedPa
 def build_briefing(
     config: Config,
     target_date: date,
+    window_start,
+    window_end,
     selected: list[RankedPaper],
     all_papers: list[Paper],
 ) -> Briefing:
@@ -277,10 +282,12 @@ def build_briefing(
 
     return Briefing(
         target_date=target_date,
+        window_start=window_start,
+        window_end=window_end,
         highlights=_build_highlights(selected),
         must_read=paired[:must_read_count],
         recommended=paired[must_read_count:],
-        research_trends=_build_research_trends(all_papers, config.topics),
+        research_trends=_build_research_trends(all_papers, window_start, window_end),
         open_questions=_build_open_questions(selected),
     )
 
@@ -294,67 +301,51 @@ def _build_highlights(selected: list[RankedPaper]) -> list[str]:
     highlights = []
     for item in selected[:5]:
         highlights.append(
-            f"{item.paper.title} ({item.interest_score}/100): {item.reason}"
+            f"{item.paper.title}: {item.reason}"
         )
     return highlights
 
 
-def _build_research_trends(papers: list[Paper], topics: list[str]) -> list[str]:
-    paper_date = papers[0].published_date.isoformat() if papers else ""
+def _build_research_trends(papers: list[Paper], window_start, window_end) -> list[str]:
+    window_label = format_beijing_window(window_start, window_end)
     total = len(papers)
     if not papers:
-        return ["本期共抓取到 0 篇论文，暂时无法判断主题趋势。"]
+        return [f"本期北京时间 {window_label} 共抓取到 0 篇天体物理论文，暂时无法判断主题趋势。"]
 
     counter: Counter[str] = Counter()
     for paper in papers:
         haystack = f"{paper.title} {paper.abstract}".casefold()
-        for topic in topics:
-            if _topic_matches(topic, haystack):
-                counter[_topic_label(topic)] += 1
+        for label, aliases in _trend_taxonomy():
+            if any(alias in haystack for alias in aliases):
+                counter[label] += 1
 
-    trends = [f"本期文章日期为 {paper_date}，共抓取到 {total} 篇论文。"]
+    trends = [f"本期北京时间 {window_label} 共抓取到 {total} 篇天体物理论文。"]
     if not counter:
-        trends.append("这些论文的主题较分散，暂时没有形成明显的配置关键词热点。")
+        trends.append("本期论文主题较分散，暂时没有形成明显高频关键词。")
         return trends
     trends.extend(
-        f"在 {paper_date} 的 arXiv 论文中，{topic}相关论文共有 {count} 篇。"
-        for topic, count in counter.most_common(6)
+        f"本期全部天体物理论文中，{topic}相关论文共有 {count} 篇。"
+        for topic, count in counter.most_common(8)
     )
     return trends
 
 
-def _topic_matches(topic: str, haystack: str) -> bool:
-    topic_key = topic.casefold()
-    aliases = {
-        "agn": ["agn", "active galactic nucleus", "active galactic nuclei"],
-        "black holes": ["black hole", "black holes"],
-        "intermediate-mass black holes": [
-            "intermediate-mass black hole",
-            "intermediate mass black hole",
-            "imbh",
-        ],
-        "dwarf galaxies": ["dwarf galaxy", "dwarf galaxies"],
-        "galaxy evolution": ["galaxy evolution"],
-        "jwst": ["jwst", "james webb"],
-        "muse": ["muse"],
-        "lensing": ["lensing", "gravitational lens"],
-    }
-    keys = aliases.get(topic_key, [topic_key])
-    return any(key in haystack for key in keys)
-
-
-def _topic_label(topic: str) -> str:
-    labels = {
-        "agn": "活动星系核（AGN）",
-        "black holes": "黑洞（black holes）",
-        "intermediate-mass black holes": "中等质量黑洞（intermediate-mass black holes）",
-        "dwarf galaxies": "矮星系（dwarf galaxies）",
-        "galaxy evolution": "星系演化（galaxy evolution）",
-        "jwst": "JWST",
-        "muse": "MUSE",
-        "lensing": "引力透镜（gravitational lensing）",
-    }
-    return labels.get(topic.casefold(), f"{topic}")
+def _trend_taxonomy() -> list[tuple[str, list[str]]]:
+    return [
+        ("星系演化（galaxy evolution）", ["galaxy evolution", "galaxies", "galaxy formation", "stellar mass", "metallicity"]),
+        ("宇宙学（cosmology）", ["cosmology", "cosmological", "dark energy", "cmb", "large-scale structure"]),
+        ("黑洞（black holes）", ["black hole", "black holes", "smbh", "supermassive black hole"]),
+        ("活动星系核（AGN）", ["agn", "active galactic nucleus", "active galactic nuclei", "quasar", "quasars"]),
+        ("恒星物理（stellar astrophysics）", ["stellar", "stars", "starspots", "asteroseismology", "white dwarf"]),
+        ("系外行星（exoplanets）", ["exoplanet", "exoplanets", "planetary", "transit", "radial velocity"]),
+        ("星际介质与恒星形成（ISM/star formation）", ["interstellar medium", "ism", "star formation", "molecular cloud", "dust"]),
+        ("超新星与暂现源（supernovae/transients）", ["supernova", "supernovae", "transient", "transients", "tidal disruption"]),
+        ("引力透镜（gravitational lensing）", ["lensing", "gravitational lens", "strong lens", "weak lens"]),
+        ("引力波与致密天体（gravitational waves/compact objects）", ["gravitational wave", "compact object", "neutron star", "binary merger"]),
+        ("观测巡天与仪器（surveys/instruments）", ["jwst", "muse", "roman", "euclid", "rubin", "lsst", "csst", "survey", "instrument"]),
+        ("数值模拟与机器学习（simulations/ML）", ["simulation", "simulations", "machine learning", "neural network", "deep learning"]),
+        ("暗物质（dark matter）", ["dark matter", "subhalo", "halo mass", "axion"]),
+    ]
 
 
 def _build_open_questions(selected: list[RankedPaper]) -> list[str]:

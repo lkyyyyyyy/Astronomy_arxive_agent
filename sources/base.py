@@ -14,6 +14,5 @@ class Source(ABC):
         self.config = config
 
     @abstractmethod
-    def fetch(self, target_date: date, topics: list[str]) -> list[Paper]:
-        """Fetch items published on target_date."""
-
+    def fetch(self, target_date: date, topics: list[str], timezone: str) -> list[Paper]:
+        """Fetch items published inside the local 08:00-to-08:00 report window."""

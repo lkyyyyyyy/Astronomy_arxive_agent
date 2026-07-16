@@ -82,7 +82,7 @@ def _brief_body(context: DeliveryContext, title: str) -> str:
     lines = [
         title,
         "",
-        f"今日共抓取论文：{context.total_fetched} 篇",
+        f"本期共抓取论文：{context.total_fetched} 篇",
         f"入选推荐论文：{selected_count} 篇",
     ]
     if context.public_url:

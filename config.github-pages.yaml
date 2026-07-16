@@ -1,8 +1,8 @@
 app:
   timezone: Asia/Shanghai
   language: English and Chinese
-  max_items: 50
-  max_selected: 5
+  max_items: 300
+  max_selected: 8
   output_dir: reports
   fallback_days: 7
 
@@ -27,14 +27,16 @@ topics:
 sources:
   arxiv:
     enabled: true
-    max_results: 50
+    max_results: 300
     timeout_seconds: 90
     retries: 3
     categories:
       - astro-ph.GA
       - astro-ph.CO
+      - astro-ph.EP
       - astro-ph.HE
       - astro-ph.IM
+      - astro-ph.SR
   nature:
     enabled: false
   science:
@@ -61,7 +63,7 @@ delivery:
     sender: ""
     recipients: []
     use_tls: true
-    attach_html: false
+    attach_html: true
     attach_markdown: false
     body_style: brief
   notion:

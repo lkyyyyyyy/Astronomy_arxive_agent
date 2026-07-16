@@ -1,6 +1,6 @@
 # AI Research Daily Agent
 
-A modular Python 3.12 agent that collects the previous day's research items, ranks them against your interests, summarizes the most interesting papers, writes a Markdown briefing, and optionally sends it to Email, Notion, PushPlus, or ServerChan.
+A modular Python 3.12 agent that collects astronomy research items from the previous Beijing-time 08:00-to-08:00 window, ranks them against your interests and broader scientific value, summarizes the most interesting papers, writes a Markdown/HTML briefing, and optionally sends it to Email, Notion, PushPlus, or ServerChan.
 
 The first version is intentionally simple: arXiv is implemented, Nature and Science source modules are clean placeholders, and the LLM layer supports OpenAI-compatible APIs plus DeepSeek through one interface.
 
@@ -8,7 +8,7 @@ The first version is intentionally simple: arXiv is implemented, Nature and Scie
 
 - YAML config for topics, sources, models, max papers, language, and delivery methods.
 - API keys and delivery secrets loaded from `.env`.
-- arXiv search constrained to the previous day by `submittedDate`.
+- arXiv search constrained to the previous 08:00-to-08:00 Beijing-time window by `submittedDate`.
 - Duplicate removal by normalized title and URL.
 - LLM ranking with score, novelty, impact, relevance, and recommendation reason.
 - Markdown and self-contained HTML reports with highlights, must-read papers, recommendations, summaries, trends, open questions, and links.
@@ -50,15 +50,17 @@ If you keep your config at the project root as `config.yaml`, the agent will als
 python main.py --config config.yaml --no-delivery
 ```
 
-By default, the agent targets the previous day in `app.timezone` and filters sources to that article date. If no papers are fetched for that date, it looks backward up to `app.fallback_days` days and reports the latest date that actually has papers. The visible title uses the actual article date, for example `天文论文日报（文章日期：2026-07-15）`.
+By default, the agent targets the previous Beijing-time reporting window: 08:00 on the target date to 08:00 the next day. If no papers are fetched for that window, it looks backward up to `app.fallback_days` days and reports the latest window that actually has papers. The visible title uses the actual paper window, for example `天文论文日报（本期：2026-07-15 08:00 至 2026-07-16 08:00，北京时间）`.
 
-This matters on weekends and holidays: if arXiv has no new matching papers, the website and email keep showing the most recent available paper date instead of pretending that stale papers are from today.
+This matters on weekends and holidays: if arXiv has no new matching papers, the website and email keep showing the most recent available paper window instead of pretending that stale papers are from today.
 
 To test a specific day:
 
 ```bash
 python main.py --date 2026-07-08 --no-delivery
 ```
+
+`topics` are not fetch filters. They are preference signals for ranking and selection. The agent fetches all configured astrophysics papers first, then selects up to `app.max_selected` papers with at least a three-star score (`>= 60/100`) based on interest, novelty, scientific value, method usefulness, source priority, and overall recommendation strength.
 
 ## LLM Providers
 
@@ -96,15 +98,22 @@ The default prompt describes the model as an experienced astronomer and research
 
 ### arXiv
 
-`sources/arxiv_source.py` uses the arXiv API and filters to items submitted on the target date. Topics are searched in title, abstract, and all fields. Categories can be narrowed in `config/config.yaml`.
+`sources/arxiv_source.py` uses the arXiv API and filters to items submitted inside the 08:00-to-08:00 Beijing-time report window. It fetches all configured astrophysics categories first; `topics` are used later for ranking, not as a fetch-time filter. The default astronomy categories cover all six arXiv astro-ph subcategories:
+
+- `astro-ph.GA`
+- `astro-ph.CO`
+- `astro-ph.EP`
+- `astro-ph.HE`
+- `astro-ph.IM`
+- `astro-ph.SR`
 
 ### Nature and Science
 
 `sources/nature_source.py` and `sources/science_source.py` are placeholders because journal feeds and APIs vary by product, license, and institution. To add a real implementation:
 
-1. Keep the `Source.fetch(target_date, topics) -> list[Paper]` interface.
+1. Keep the `Source.fetch(target_date, topics, timezone) -> list[Paper]` interface.
 2. Use an official API or RSS feed when available.
-3. Filter published dates to `target_date`.
+3. Filter published dates to the 08:00-to-08:00 report window in `timezone`.
 4. Map results into `utils.models.Paper`.
 5. Register the class in `sources/factory.py`.
 

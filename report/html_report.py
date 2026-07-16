@@ -7,6 +7,7 @@ from pathlib import Path
 import random
 import re
 
+from utils.dates import format_beijing_window
 from utils.models import Briefing, PaperSummary, RankedPaper
 
 
@@ -55,28 +56,41 @@ class HtmlReportBuilder:
   <style>
 {_css()}
   </style>
+  <script>
+    window.MathJax = {{
+      tex: {{
+        inlineMath: [["$", "$"], ["\\\\(", "\\\\)"]],
+        displayMath: [["$$", "$$"], ["\\\\[", "\\\\]"]],
+        processEscapes: true
+      }},
+      options: {{
+        skipHtmlTags: ["script", "noscript", "style", "textarea", "pre", "code"]
+      }}
+    }};
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 </head>
 <body{_theme_image_style()}>
   <main class="page-shell">
     <header class="hero">
       <div class="hero-content">
         <p class="subtitle">ASTRONOMY RESEARCH DAILY</p>
-        <h1>天文论文<span class="title-gradient">日报</span><span class="title-cutoff">（文章日期：{briefing.target_date.isoformat()}）</span></h1>
+        <h1>天文论文<span class="title-gradient">日报</span><span class="title-cutoff">（本期：{_window_label(briefing)}）</span></h1>
         <p class="hero-tagline">探索宇宙 · 追踪前沿 · 启发研究</p>
       </div>
       <div class="hero-grid">
-        {_stat_tile("该日抓取论文数", str(_total_fetched(briefing)))}
+        {_stat_tile("本期抓取论文数", str(_total_fetched(briefing)))}
         {_stat_tile("入选推荐论文数", str(len(all_items)))}
         {_stat_tile("最高推荐等级", _highest_rating(all_items))}
         {_stat_tile("主要趋势关键词", _main_trend_keyword(briefing))}
       </div>
     </header>
 
-    <section id="trends" class="trend-dashboard" aria-label="该日趋势">
+    <section id="trends" class="trend-dashboard" aria-label="本期趋势">
       <div class="section-heading">
         <p class="section-kicker">Signals</p>
-        <h2>该日趋势</h2>
-        <p class="section-note">基于 {briefing.target_date.isoformat()} 的论文统计，共 {_total_fetched(briefing)} 篇。</p>
+        <h2>本期趋势</h2>
+        <p class="section-note">基于北京时间 {_window_label(briefing)} 的全部天体物理论文统计，共 {_total_fetched(briefing)} 篇。</p>
       </div>
       {_trend_widgets(briefing.research_trends)}
     </section>
@@ -92,7 +106,7 @@ class HtmlReportBuilder:
         <section id="must-read" class="section">
           <div class="section-heading">
             <p class="section-kicker">Top picks</p>
-            <h2>该日最值得读</h2>
+            <h2>本期最值得读</h2>
           </div>
           {_paper_cards(must_read, start_index=1)}
         </section>
@@ -131,7 +145,14 @@ class HtmlReportBuilder:
 
 
 def _report_title(briefing: Briefing) -> str:
-    return f"天文论文日报（文章日期：{briefing.target_date.isoformat()}）"
+    return f"天文论文日报（本期：{_window_label(briefing)}）"
+
+
+def _window_label(briefing: Briefing) -> str:
+    label = format_beijing_window(briefing.window_start, briefing.window_end)
+    if label:
+        return label
+    return f"{briefing.target_date.isoformat()} 08:00 至次日 08:00，北京时间"
 
 
 def _stat_tile(label: str, value: str) -> str:
@@ -1981,6 +2002,99 @@ def _css() -> str:
 
       .trend-widget {
         padding: 12px 8px;
+      }
+    }
+
+    /* Final interaction polish: smoother sidebar and safer small-screen trend widgets. */
+    .dashboard-layout {
+      grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+      transition: grid-template-columns 260ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .dashboard-layout.sidebar-collapsed {
+      grid-template-columns: 56px minmax(0, 1fr);
+    }
+
+    .dashboard-sidebar {
+      position: sticky;
+      top: 22px;
+      align-self: start;
+      contain: layout paint;
+    }
+
+    .toc {
+      transform-origin: left center;
+      transition:
+        opacity 220ms ease,
+        transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+        visibility 220ms ease;
+    }
+
+    .dashboard-layout.sidebar-collapsed .toc {
+      opacity: 0;
+      transform: translateX(-8px) scaleX(0.96);
+      pointer-events: none;
+      visibility: hidden;
+    }
+
+    .trend-grid {
+      grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+    }
+
+    .trend-widget {
+      min-width: 0;
+    }
+
+    mjx-container {
+      color: rgba(240, 238, 255, 0.94);
+      overflow-x: auto;
+      overflow-y: hidden;
+      max-width: 100%;
+    }
+
+    @media (max-width: 960px) {
+      .dashboard-layout,
+      .dashboard-layout.sidebar-collapsed {
+        grid-template-columns: 1fr;
+      }
+
+      .dashboard-sidebar {
+        position: relative;
+        top: auto;
+      }
+
+      .dashboard-layout.sidebar-collapsed .toc {
+        opacity: 1;
+        transform: none;
+        pointer-events: auto;
+        visibility: visible;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .trend-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .trend-widget {
+        min-height: 118px;
+        padding: 12px 6px;
+      }
+
+      .trend-ring {
+        width: clamp(58px, 22vw, 70px);
+        height: clamp(58px, 22vw, 70px);
+      }
+
+      .trend-ring span {
+        font-size: 1.12rem;
+      }
+
+      .trend-widget p {
+        font-size: 0.72rem;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
       }
     }
 """

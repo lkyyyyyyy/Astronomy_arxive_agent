@@ -14,9 +14,8 @@ class ScienceSource(Source):
 
     name = "science"
 
-    def fetch(self, target_date: date, topics: list[str]) -> list[Paper]:
+    def fetch(self, target_date: date, topics: list[str], timezone: str) -> list[Paper]:
         LOGGER.info(
             "Science source is a placeholder. See README.md for integration notes."
         )
         return []
-

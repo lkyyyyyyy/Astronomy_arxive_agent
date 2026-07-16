@@ -2,22 +2,23 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from utils.dates import format_beijing_window
 from utils.models import Briefing, PaperSummary, RankedPaper
 
 
 class MarkdownReportBuilder:
     def build(self, briefing: Briefing) -> str:
-        lines: list[str] = [f"# 天文论文日报（文章日期：{briefing.target_date.isoformat()}）"]
+        lines: list[str] = [f"# 天文论文日报（本期：{_window_label(briefing)}）"]
 
-        self._append_section(lines, "## 该日最值得读")
+        self._append_section(lines, "## 本期最值得读")
         must_read = briefing.must_read[:3]
         lines.extend(self._paper_sections(must_read, start_index=1))
 
         self._append_section(lines, "## 推荐阅读")
         lines.extend(self._paper_sections(briefing.recommended, start_index=len(must_read) + 1))
 
-        self._append_section(lines, "## 该日趋势")
-        lines.extend(self._bullet_list(briefing.research_trends, "该日论文数量不足，暂时无法判断稳定趋势。"))
+        self._append_section(lines, "## 本期趋势")
+        lines.extend(self._bullet_list(briefing.research_trends, "本期论文数量不足，暂时无法判断稳定趋势。"))
 
         self._append_section(lines, "## 可以关注的问题")
         lines.extend(self._bullet_list(briefing.open_questions, "本期暂无可进一步追踪的问题。"))
@@ -86,6 +87,13 @@ def _score_to_stars(score: int) -> str:
     if score >= 40:
         return "⭐⭐"
     return "⭐"
+
+
+def _window_label(briefing: Briefing) -> str:
+    label = format_beijing_window(briefing.window_start, briefing.window_end)
+    if label:
+        return label
+    return f"{briefing.target_date.isoformat()} 08:00 至次日 08:00，北京时间"
 
 
 def _optional_section(heading: str, value: str) -> list[str]:

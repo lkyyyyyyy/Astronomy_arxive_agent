@@ -8,6 +8,7 @@ from utils.json_tools import extract_json
 from utils.models import Paper, RankedPaper
 
 LOGGER = logging.getLogger(__name__)
+MAX_LLM_RANKING_CANDIDATES = 80
 
 
 class PaperRanker:
@@ -20,11 +21,13 @@ class PaperRanker:
         if not papers:
             return []
 
+        heuristic = self._rank_heuristically(papers, topics)
+        candidates = [item.paper for item in heuristic[:MAX_LLM_RANKING_CANDIDATES]]
         try:
-            return self._rank_with_llm(papers, topics)
+            return self._rank_with_llm(candidates, topics)
         except Exception as exc:
             LOGGER.warning("LLM ranking failed; using heuristic ranking: %s", exc)
-            return self._rank_heuristically(papers, topics)
+            return heuristic
 
     def _rank_with_llm(self, papers: list[Paper], topics: list[str]) -> list[RankedPaper]:
         user_prompt = self._ranking_prompt(papers, topics)
@@ -72,11 +75,17 @@ class PaperRanker:
 
         return f"""
 Output language for all text fields: Chinese.
-User interests: {", ".join(topics)}
+User interests, used as preference signals but not hard filters: {", ".join(topics)}
 
-Rank every paper below. Score 0-100 using novelty, potential impact, and relevance
-to the interests. Return exactly one valid JSON array using double quotes and no
-trailing commas. Each item must use this schema:
+Rank every paper below. Score 0-100 using broad scientific value, novelty,
+methodological strength, potential impact, timeliness, source prestige when
+available, and relevance to the user interests. Papers can be highly recommended
+even when they are outside the configured interests if they are unusually novel,
+important, methodologically useful, published in Nature/Science, or simply
+scientifically interesting.
+
+Return exactly one valid JSON array using double quotes and no trailing commas.
+Each item must use this schema:
 [
   {{
     "index": 1,
@@ -93,6 +102,9 @@ Style requirements:
 - Keep paper titles in their original language when mentioning them.
 - For technical terms, use Chinese first and put English in parentheses when useful.
 - Examples: 中等质量黑洞（intermediate-mass black hole）, 活动星系核（AGN）, 引力透镜（gravitational lensing）.
+- Do not over-rank a paper merely because it contains an interest keyword.
+- Prefer papers with clear new data, new methods, broad implications, strong surveys, notable instruments, or surprising results.
+- Scores below 60 mean the paper should usually not appear in the final briefing.
 - Return strict valid JSON only. No Markdown. No code fences. No commentary.
 
 Papers:
@@ -103,20 +115,35 @@ Papers:
         ranked = []
         for paper in papers:
             haystack = f"{paper.title} {paper.abstract}".casefold()
-            matches = [topic for topic in topics if topic.casefold() in haystack]
-            source_bonus = 15 if (paper.journal or "").lower() in {"nature", "science"} else 0
-            score = min(100, 45 + len(matches) * 10 + source_bonus)
-            reason = (
-                f"与已配置兴趣相关：{', '.join(matches)}。"
-                if matches
-                else "这是当天抓取到的论文，但暂未发现与配置兴趣的精确关键词匹配。"
-            )
+            matches = _interest_matches(topics, haystack)
+            score = 48
+            score += min(18, len(matches) * 5)
+            score += _keyword_bonus(haystack, _NOVELTY_TERMS, 12)
+            score += _keyword_bonus(haystack, _METHOD_TERMS, 10)
+            score += _keyword_bonus(haystack, _IMPACT_TERMS, 10)
+            if _is_prestige_source(paper):
+                score += 18
+            if len(paper.abstract) > 900:
+                score += 4
+            score = min(100, score)
+            reason_parts = []
+            if matches:
+                reason_parts.append(f"与用户兴趣相关：{', '.join(matches[:4])}")
+            if _contains_any(haystack, _NOVELTY_TERMS):
+                reason_parts.append("摘要显示有新样本、新发现或新方法")
+            if _contains_any(haystack, _METHOD_TERMS):
+                reason_parts.append("方法或数据集具有复用价值")
+            if _contains_any(haystack, _IMPACT_TERMS):
+                reason_parts.append("可能对相关领域有较宽影响")
+            if _is_prestige_source(paper):
+                reason_parts.append("来源优先级较高")
+            reason = "；".join(reason_parts) + "。" if reason_parts else "基于标题、摘要和来源的通用科研价值进行初步推荐。"
             ranked.append(
                 RankedPaper(
                     paper=paper,
                     interest_score=score,
-                    novelty="暂未提取",
-                    potential_impact="基于来源和关键词相关性的初步判断。",
+                    novelty="基于摘要关键词的初步判断。",
+                    potential_impact="基于来源、方法和摘要信号的初步判断。",
                     relevance=reason,
                     reason=reason,
                 )
@@ -130,3 +157,75 @@ def _bounded_score(value: object) -> int:
     except (TypeError, ValueError):
         return 0
     return max(0, min(100, score))
+
+
+_NOVELTY_TERMS = [
+    "new",
+    "novel",
+    "first",
+    "discover",
+    "discovery",
+    "unprecedented",
+    "previously unknown",
+    "candidate",
+    "constraints",
+]
+_METHOD_TERMS = [
+    "jwst",
+    "muse",
+    "alma",
+    "euclid",
+    "roman",
+    "rubin",
+    "lsst",
+    "simulation",
+    "machine learning",
+    "deep learning",
+    "spectroscopy",
+    "survey",
+    "catalog",
+    "catalogue",
+]
+_IMPACT_TERMS = [
+    "implications",
+    "challenge",
+    "constraints",
+    "population",
+    "formation",
+    "evolution",
+    "cosmology",
+    "dark matter",
+]
+
+
+def _interest_matches(topics: list[str], haystack: str) -> list[str]:
+    aliases = {
+        "agn": ["agn", "active galactic nucleus", "active galactic nuclei", "quasar", "quasars"],
+        "black holes": ["black hole", "black holes"],
+        "intermediate-mass black holes": ["intermediate-mass black hole", "intermediate mass black hole", "imbh"],
+        "dwarf galaxies": ["dwarf galaxy", "dwarf galaxies"],
+        "galaxy evolution": ["galaxy evolution"],
+        "jwst": ["jwst", "james webb"],
+        "muse": ["muse"],
+        "lensing": ["lensing", "gravitational lens"],
+    }
+    matches = []
+    for topic in topics:
+        keys = aliases.get(topic.casefold(), [topic.casefold()])
+        if any(key in haystack for key in keys):
+            matches.append(topic)
+    return matches
+
+
+def _keyword_bonus(haystack: str, terms: list[str], maximum: int) -> int:
+    matches = sum(1 for term in terms if term in haystack)
+    return min(maximum, matches * 3)
+
+
+def _contains_any(haystack: str, terms: list[str]) -> bool:
+    return any(term in haystack for term in terms)
+
+
+def _is_prestige_source(paper: Paper) -> bool:
+    text = f"{paper.source} {paper.journal or ''}".casefold()
+    return any(name in text for name in ["nature", "science"])
