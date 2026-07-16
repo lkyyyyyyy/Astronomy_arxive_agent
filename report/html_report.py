@@ -10,7 +10,22 @@ import re
 from utils.models import Briefing, PaperSummary, RankedPaper
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+REPO_IMAGE_POOL = [
+    PROJECT_ROOT / "assets/astronomy/astronomy-01.jpg",
+    PROJECT_ROOT / "assets/astronomy/astronomy-02.jpg",
+    PROJECT_ROOT / "assets/astronomy/astronomy-03.jpg",
+    PROJECT_ROOT / "assets/astronomy/astronomy-04.jpg",
+    PROJECT_ROOT / "assets/astronomy/astronomy-05.jpg",
+    PROJECT_ROOT / "assets/astronomy/astronomy-06.jpg",
+    PROJECT_ROOT / "assets/astronomy/astronomy-07.jpg",
+    PROJECT_ROOT / "assets/astronomy/astronomy-08.jpg",
+    PROJECT_ROOT / "assets/astronomy/astronomy-09.jpg",
+    PROJECT_ROOT / "assets/astronomy/astronomy-10.jpg",
+]
+
 ASTRONOMY_IMAGE_POOL = [
+    *REPO_IMAGE_POOL,
     Path("/Users/lky/Desktop/图片/酷炫天文图片/gsfc-20171208-archive-e001885orig.jpg"),
     Path("/Users/lky/Desktop/图片/酷炫天文图片/potw2129a.jpg"),
     Path("/Users/lky/Desktop/图片/酷炫天文图片/stephan_quintet~large.jpg"),
