@@ -10,7 +10,7 @@ site:
   output_dir: site
   latest_filename: index.html
   archive_dir: archive
-  public_url: "https://lkyyyyyyy.github.io/Astronomy-daily/"
+  public_url: "https://lkyyyyyyy.github.io/Astronomy_arxive_agent/"
 
 topics:
   - AGN
