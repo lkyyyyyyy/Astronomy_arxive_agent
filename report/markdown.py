@@ -7,7 +7,7 @@ from utils.models import Briefing, PaperSummary, RankedPaper
 
 class MarkdownReportBuilder:
     def build(self, briefing: Briefing) -> str:
-        lines: list[str] = ["# 天文论文日报"]
+        lines: list[str] = [f"# 天文论文日报（截止 {briefing.target_date.isoformat()}）"]
 
         self._append_section(lines, "## 今日最值得读")
         must_read = briefing.must_read[:3]

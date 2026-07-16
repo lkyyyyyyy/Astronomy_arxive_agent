@@ -73,7 +73,7 @@ def main() -> None:
         )
         return
 
-    title = "天文论文日报"
+    title = f"天文论文日报（截止 {target_date.isoformat()}）"
     delivery_context = DeliveryContext(
         markdown=markdown,
         markdown_path=markdown_path,

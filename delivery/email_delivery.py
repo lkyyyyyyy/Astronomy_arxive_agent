@@ -46,7 +46,7 @@ class EmailDelivery(DeliveryChannel):
 
         html_available = bool(context.html_path and context.html_path.exists())
         if self.config.body_style == "brief" and html_available:
-            message.set_content(_brief_body(context))
+            message.set_content(_brief_body(context, title))
         else:
             if self.config.attach_html and not html_available:
                 LOGGER.warning("HTML report is missing; falling back to Markdown email body.")
@@ -77,10 +77,10 @@ class EmailDelivery(DeliveryChannel):
         LOGGER.info("Email briefing sent to %d recipient(s).", len(recipients))
 
 
-def _brief_body(context: DeliveryContext) -> str:
+def _brief_body(context: DeliveryContext, title: str) -> str:
     selected_count = len(context.selected_papers)
     lines = [
-        "天文论文日报",
+        title,
         "",
         f"今日共抓取论文：{context.total_fetched} 篇",
         f"入选推荐论文：{selected_count} 篇",

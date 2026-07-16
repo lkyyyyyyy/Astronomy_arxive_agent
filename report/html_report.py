@@ -44,13 +44,14 @@ class HtmlReportBuilder:
         must_read = briefing.must_read[:3]
         recommended = briefing.recommended
         all_items = must_read + recommended
+        report_title = _report_title(briefing)
 
         return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>天文论文日报</title>
+  <title>{escape(report_title)}</title>
   <style>
 {_css()}
   </style>
@@ -60,7 +61,7 @@ class HtmlReportBuilder:
     <header class="hero">
       <div class="hero-content">
         <p class="subtitle">ASTRONOMY RESEARCH DAILY</p>
-        <h1>天文论文<span class="title-gradient">日报</span></h1>
+        <h1>天文论文<span class="title-gradient">日报</span><span class="title-cutoff">（截止 {briefing.target_date.isoformat()}）</span></h1>
         <p class="hero-tagline">探索宇宙 · 追踪前沿 · 启发研究</p>
       </div>
       <div class="hero-grid">
@@ -126,6 +127,10 @@ class HtmlReportBuilder:
         output_path = path / filename
         output_path.write_text(html, encoding="utf-8")
         return output_path
+
+
+def _report_title(briefing: Briefing) -> str:
+    return f"天文论文日报（截止 {briefing.target_date.isoformat()}）"
 
 
 def _stat_tile(label: str, value: str) -> str:
@@ -267,10 +272,10 @@ def _image_data_uri(path: Path, max_size: int, quality: int) -> str:
 def _toc(items: list[tuple[RankedPaper, PaperSummary]]) -> str:
     if not items:
         return """
-    <details class="toc" aria-label="论文目录" open>
-      <summary>论文目录</summary>
+    <nav class="toc" aria-label="论文目录">
+      <div class="toc-title">论文目录</div>
       <p class="empty">今天暂无入选论文。</p>
-    </details>
+    </nav>
 """
 
     links = []
@@ -281,12 +286,12 @@ def _toc(items: list[tuple[RankedPaper, PaperSummary]]) -> str:
             f'<span>{index:02d}</span>{escape(ranked.paper.title)}</a>'
         )
     return f"""
-    <details class="toc" aria-label="论文目录" open>
-      <summary>论文目录</summary>
+    <nav class="toc" aria-label="论文目录">
+      <div class="toc-title">论文目录</div>
       <div class="toc-links">
         {"".join(links)}
       </div>
-    </details>
+    </nav>
 """
 
 
@@ -671,6 +676,20 @@ def _css() -> str:
       text-shadow: 0 0 28px rgba(95, 215, 255, 0.14);
     }
 
+    .title-cutoff {
+      display: block;
+      margin-top: 0.16em;
+      color: rgba(238, 233, 255, 0.88);
+      background: none;
+      -webkit-background-clip: initial;
+      background-clip: initial;
+      font-family: var(--body-font);
+      font-size: clamp(1.05rem, 2vw, 1.8rem);
+      font-weight: 420;
+      line-height: 1.25;
+      text-shadow: none;
+    }
+
     .subtitle {
       display: inline-flex;
       width: fit-content;
@@ -746,12 +765,21 @@ def _css() -> str:
       background: rgba(6, 12, 28, 0.70);
     }
 
+    .toc-title,
     .toc h2,
     .section-heading h2,
     .panel h2 {
       margin-bottom: 0;
       font-family: var(--title-font);
       font-size: 1.48rem;
+    }
+
+    .toc-title {
+      color: #f6f9ff;
+      font-size: 0.92rem;
+      font-weight: 760;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
 
     .toc-links {
@@ -1262,8 +1290,7 @@ def _css() -> str:
       background: rgba(5, 12, 28, 0.72);
     }
 
-    .toc summary {
-      cursor: pointer;
+    .toc-title {
       padding: 18px 20px;
       color: #f6f9ff;
       font-family: var(--label-sans);
@@ -1271,7 +1298,6 @@ def _css() -> str:
       font-weight: 760;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      list-style-position: inside;
       border-bottom: 1px solid var(--hairline);
     }
 
@@ -1491,7 +1517,7 @@ def _css() -> str:
       transition: opacity 240ms ease, transform 240ms ease, max-height 260ms ease, padding 240ms ease;
     }
 
-    .toc summary {
+    .toc-title {
       color: #f6f2ff;
       border-bottom-color: var(--magazine-line);
     }
@@ -1815,6 +1841,15 @@ def _css() -> str:
     body {
       position: relative;
       isolation: isolate;
+      background:
+        linear-gradient(180deg, rgba(2, 3, 10, 0.64), rgba(2, 3, 10, 0.88) 42%, rgba(2, 3, 10, 0.96)),
+        radial-gradient(circle at 18% 8%, rgba(155, 124, 255, 0.20), transparent 23rem),
+        radial-gradient(circle at 84% 18%, rgba(75, 106, 255, 0.16), transparent 27rem),
+        var(--page-image, none),
+        linear-gradient(180deg, #02030a 0%, #050713 52%, #02030a 100%);
+      background-size: auto, auto, auto, cover, auto;
+      background-position: center;
+      background-attachment: fixed;
     }
 
     body::before,
@@ -1824,13 +1859,13 @@ def _css() -> str:
 
     body::before {
       background:
-        linear-gradient(180deg, rgba(2, 3, 10, 0.70), rgba(2, 3, 10, 0.97)),
+        linear-gradient(180deg, rgba(2, 3, 10, 0.42), rgba(2, 3, 10, 0.78) 48%, rgba(2, 3, 10, 0.92)),
         radial-gradient(circle at 80% 6%, rgba(155, 124, 255, 0.18), transparent 28rem),
         var(--page-image, none);
       background-size: auto, auto, cover;
       background-position: center;
-      opacity: 0.44;
-      filter: saturate(0.9) contrast(1.05) brightness(0.72);
+      opacity: 0.62;
+      filter: saturate(0.95) contrast(1.06) brightness(0.82);
     }
 
     body::after {
